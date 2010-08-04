@@ -10,8 +10,25 @@ import Control.Exception
 import Control.Monad.Trans
 import Control.Monad.Reader 
 
+-- | discard the result of a monad action and return ()
 ignore :: Monad m => m a -> m ()
 ignore x = x >> return ()
+
+
+-- Number of Frames to Process -> user Data -> IO return Value
+type ProcessCallback = CUInt -> F.Ptr () -> IO CInt
+
+-- | Convert a processing function to a function pointer
+foreign import ccall safe "wrapper" mkProcessCallback
+  :: ProcessCallback -> IO Jack.ProcessCallback
+     
+--  SampleRate -> user Data -> IO returnvalue
+type SampleRateCallback = CUInt -> F.Ptr () -> IO CInt
+
+-- | Convert a Sample rate callback function to a function pointer
+foreign import ccall safe "wrapper" mkSampleRateCallback
+  :: SampleRateCallback -> IO Jack.SampleRateCallback
+
 
 foreign import ccall "wrapper" mkFreeFunPtr 
   :: (FunPtr a -> IO ()) -> IO (FunPtr (FunPtr a -> IO ()))

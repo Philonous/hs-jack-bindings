@@ -30,7 +30,7 @@
 -- This module provides low level language bindings to the 
 -- Jack Audio Connection Kit (http://jackaudio.org ). 
 -- It is intended to be a faithfull representation of the C include files.
--- Parameters are converted only where the intendet meaning is obvious. 
+-- Parameters are converted only where the meaning is obvious. 
 
 {-# LANGUAGE ForeignFunctionInterface #-}
 
@@ -80,6 +80,7 @@ jack_client_t *jack_client_open_with_defaultserver(const char *client_name,
   }
 #endc 
 
+-- | open an external client with the defailt server
 {#fun client_open_with_defaultserver as ^ 
   {`String', combineBitMasks `[Options]' , alloca- `[Status]' extractStatusMasks* }
   -> `Client' Client #}
@@ -95,29 +96,39 @@ jack_client_t *jack_client_open_with_server_name(const char *client_name,
   }
 #endc 
 
+
+-- | open an external client with the specified server
 {#fun client_open_with_server_name as ^ 
-  {`String', combineBitMasks `[Options]' 
+  {`String', combineBitMasks `[Options]' -- | foooblarg
   , alloca- `[Status]' extractStatusMasks*
   , `String' }
   -> `Client' Client #}
 
 -------------------------
 
+-- | disconnect a client from the server
 {#fun client_close as ^ 
  {fromClient `Client'} -> `()' #}
 
+
+-- | the maximal length of the client name in bytes
 {#fun client_name_size as ^ 
   {} -> `Int' #}
 
+-- | The name of the client. This may differ from the one specified in 
+-- createClient when the requested name whas not unique
 {#fun get_client_name as ^ 
  {fromClient `Client'} -> `String' #}
 
+-- | DEPRECATED. Use internalClientOpen
 {#fun internal_client_new  as ^
  {`String',`String',`String' } -> `Int' #}
 
+-- | DEPRECATED. use internalClientLoad
 {#fun internal_client_close as ^ 
  {`String'} -> `()' #}
 
+-- | Tell the server to start processing audio
 {#fun activate as ^ 
  {fromClient `Client'} -> `Int' #}
 
@@ -246,7 +257,7 @@ type XRunCallback = {#type XRunCallback#}
  {fromClient `Client', `Word32'} -> `Int' #}
 
 {#fun get_sample_rate as ^
- {fromClient `Client'} -> `Word32' #}
+ {fromClient `Client'} -> `CUInt' fromIntegral #}
 
 {#fun get_buffer_size as ^
  {fromClient `Client'} -> `Word32' #}
