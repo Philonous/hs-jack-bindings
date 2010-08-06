@@ -36,17 +36,111 @@
 
 
 #include <jack/jack.h>
+#include "wrapper.h"
 
-module Jack.Bindings  where
+
+module Sound.Jack.Bindings 
+  ( clientOpenWithDefaultserver
+  , clientOpenWithServerName
+  , clientClose
+  , clientNameSize
+  , getClientName
+  , internalClientNew
+  , internalClientClose
+  , activate
+  , deactivate
+  , clientThreadId
+  , isRealtime
+  , cycleWait
+  , cycleSignal
+  , setProcessThread
+  , setThreadInitCallback
+  , setProcessCallback
+  , setFreewheelCallback
+  , setBufferSizeCallback
+  , setSampleRateCallback
+  , setClientRegistrationCallback
+  , setPortRegistrationCallback
+  , setPortConnectCallback
+  , setGraphOrderCallback
+  , setXrunCallback
+  , setFreewheel
+  , setBufferSize
+  , getSampleRate
+  , getBufferSize
+  , engineTakeoverTimebase
+  , cpuLoad
+  , portRegister
+  , portUnregister
+  , portGetBuffer
+  , portName
+  , portShortName
+  , portFlags
+  , portType
+  , portIsMine
+  , portConnected
+  , portGetConnections
+  , portGetAllConnections
+  , jackPortGetLatency
+  , jackPortGetTotalLatency
+  , portSetLatency
+  , recomputeTotalLatencies
+  , portSetName
+  , portSetAlias
+  , portUnsetAlias
+  , portRequestMonitor
+  , portRequestMonitorByName
+  , portEnsureMonitor
+  , portMonitoringInput
+  , connect
+  , disconnect
+  , portDisconnect
+  , portNameSize
+  , portTypeSize
+  , getPorts
+  , portByName
+  , portById
+  , framesSinceCycleStart
+  , frameTime
+  , framesToTime
+  , timeToFrames
+  , getTime
+
+  , Port
+  , PortFlags(..)
+  , AudioSample
+  , BufferSizeCallbackPtr
+  , ClientRegistrationCallbackPtr
+  , FreewheelCallbackPtr
+  , GraphOrderCallbackPtr
+  , PortConnectCallbackPtr
+  , PortRegistrationCallbackPtr
+  , ProcessCallbackPtr
+  , SampleRateCallbackPtr
+  , ThreadCallbackPtr
+  , ThreadInitCallbackPtr
+  , XRunCallbackPtr
+  , Options(..)
+  , Client                   -- opaque
+  , Status(..)
+  , PortID                   -- opaque
+  , defaultAudioType
+  , defaultMidiType
+  , fromPThread
+  , NFrames
+  , PThread
+  , Time
+  ) where
 
 import C2HS
-import Foreign.Ptr
-import Foreign.C.Types
 import Control.Monad
 
 {#context lib="jack" prefix = "jack" #}
 
+defaultAudioType :: String
 defaultAudioType = "32 bit float mono audio"
+
+defaultMidiType :: String
 defaultMidiType = "8 bit raw midi"
 
 -- | jack_client_t is opaque. We only toss it around, never touch it directly
@@ -71,14 +165,14 @@ extractStatusMasks = peek >=> \bits ->
 
 -------------------------
 
-#c
-// Wrapper for jack_client_open which uses varargs aka "The horror from below"
-// Someone should tell those chaps that cool kids don't use vararg 
-jack_client_t *jack_client_open_with_defaultserver(const char *client_name, 
-  jack_options_t options, jack_status_t *status) {
-   jack_client_open(client_name, options, status);
-  }
-#endc 
+-- #c
+-- // Wrapper for jack_client_open which uses varargs aka "The horror from below"
+-- // Someone should tell those chaps that cool kids don't use vararg 
+-- jack_client_t *jack_client_open_with_defaultserver(const char *client_name, 
+--   jack_options_t options, jack_status_t *status) {
+--    jack_client_open(client_name, options, status);
+--   }
+-- #endc 
 
 -- | open an external client with the defailt server
 {#fun client_open_with_defaultserver as ^ 
@@ -88,13 +182,13 @@ jack_client_t *jack_client_open_with_defaultserver(const char *client_name,
 ------------------------
 
 
-#c
-// Let's just hope no one ever needs more than one server... 
-jack_client_t *jack_client_open_with_server_name(const char *client_name, 
-  jack_options_t options, jack_status_t *status, const char* server) {
-   jack_client_open(client_name, options, status, server);
-  }
-#endc 
+-- #c
+-- // Let's just hope no one ever needs more than one server... 
+-- jack_client_t *jack_client_open_with_server_name(const char *client_name, 
+--   jack_options_t options, jack_status_t *status, const char* server) {
+--    jack_client_open(client_name, options, status, server);
+--   }
+-- #endc 
 
 
 -- | open an external client with the specified server
@@ -154,99 +248,108 @@ type NFrames =  {#type nframes_t #}
 {#fun cycle_signal as ^
  {fromClient `Client', `Int'} -> `()' #}
 
-type ThreadCallback = {# type ThreadCallback #}
+firstly action = (>>=) . action
+
+type ThreadCallbackPtr = {# type ThreadCallback #}
+type ThreadCallback = Ptr () -> IO (Ptr ())
+
+foreign import ccall safe "wrapper" mkThreadCallback
+  :: ThreadCallback            -> IO ThreadCallbackPtr            
+
+toThreadCallback = firstly mkThreadCallback
 
 {#fun set_process_thread as ^
- { fromClient `Client', id `ThreadCallback', id `Ptr ()' } 
+ { fromClient  `Client'
+ , toThreadCallback* `ThreadCallback'
+ , id  `Ptr ()' 
+ } 
   -> `Int' #} 
 
-type ThreadInitCallback =  {#type ThreadInitCallback#} 
+type ThreadInitCallbackPtr =  {#type ThreadInitCallback#} 
 
 {#fun set_thread_init_callback as ^
  { fromClient `Client'
- , id `ThreadInitCallback'
+ , id `ThreadInitCallbackPtr'
  , id `Ptr ()' } 
   -> `Int' #} 
 
 -- TODO:
 -- thread_on_shutdown
 
---type ProcessCallback = FunPtr(CUInt -> Ptr () -> IO CInt)
-type ProcessCallback = {# type ProcessCallback #}
+--type ProcessCallbackPtr = FunPtr(CUInt -> Ptr () -> IO CInt)
+type ProcessCallbackPtr = {# type ProcessCallback #}
 
 {#fun set_process_callback as ^
  { fromClient `Client'
- , id `ProcessCallback'
+ , id `ProcessCallbackPtr'
  , id `Ptr ()' } 
   -> `Int' #} 
 
 
-type FreewheelCallback = {#type FreewheelCallback#} 
+type FreewheelCallbackPtr = {#type FreewheelCallback#} 
 
 {#fun set_freewheel_callback as ^
  { fromClient `Client'
- , id `FreewheelCallback'
+ , id `FreewheelCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
-
-type BufferSizeCallback = {#type BufferSizeCallback#} 
+type BufferSizeCallbackPtr = {#type BufferSizeCallback#} 
 
 {#fun set_buffer_size_callback as ^
  { fromClient `Client'
- , id `BufferSizeCallback'
+ , id `BufferSizeCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
 
-type SampleRateCallback = {#type SampleRateCallback#} 
+type SampleRateCallbackPtr = {#type SampleRateCallback#} 
 
 {#fun set_sample_rate_callback as ^
  { fromClient `Client'
- , id `SampleRateCallback'
+ , id `SampleRateCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
 
-type ClientRegistrationCallback = {#type ClientRegistrationCallback#} 
+type ClientRegistrationCallbackPtr = {#type ClientRegistrationCallback#} 
 
 {#fun set_client_registration_callback as ^
  { fromClient `Client'
- , id `ClientRegistrationCallback'
+ , id `ClientRegistrationCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
-
-type PortRegistrationCallback = {#type PortRegistrationCallback#} 
+type PortRegistrationCallbackPtr = {#type PortRegistrationCallback#} 
 
 {#fun set_port_registration_callback as ^
  { fromClient `Client'
- , id `PortRegistrationCallback'
+ , id `PortRegistrationCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
-type PortConnectCallback = {#type PortConnectCallback#}
+type PortConnectCallbackPtr = {#type PortConnectCallback#}
 
 {#fun set_port_connect_callback as ^
  { fromClient `Client'
- , id `PortConnectCallback'
+ , id `PortConnectCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
-type GraphOrderCallback = {#type GraphOrderCallback#} 
+type GraphOrderCallbackPtr = {#type GraphOrderCallback#} 
 
 {#fun set_graph_order_callback as ^
  { fromClient `Client'
- , id `GraphOrderCallback'
+ , id `GraphOrderCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
 
-type XRunCallback = {#type XRunCallback#} 
+type XRunCallbackPtr = {#type XRunCallback#} 
 
 {#fun set_xrun_callback as ^
  { fromClient `Client'
- , id `XRunCallback'
+ , id `XRunCallbackPtr'
  , id `(Ptr ())' } 
   -> `Int' #} 
 
@@ -284,7 +387,6 @@ portFlagList = [PortIsInput , PortIsOutput , PortIsPhysical , PortCanMonitor , P
 {#fun port_unregister as ^ 
  {fromClient `Client', fromPort `Port'} -> `Int' #}
 
--- TODO: replace Ptr () with something more meaningful 
 {#fun port_get_buffer as ^
  {fromPort `Port', `Word32'} -> `Ptr AudioSample' castPtr #}
 
